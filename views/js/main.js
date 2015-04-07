@@ -14,6 +14,9 @@ http://www.html5rocks.com/en/tutorials/webperformance/usertiming/
 Creator:
 Cameron Pittman, Udacity Course Developer
 cameron *at* udacity *dot* com
+
+Optimized by:
+HH
 */
 
 // As you may have realized, this website randomly generates pizzas.
@@ -205,10 +208,10 @@ function getAdj(x){
       "extinct", "galactic"];
       return scientific;
     default:
-      var scientific_default = ["scientific", "technical", "digital", "programming", "calculating", "formulating", "cyberpunk", "mechanical", "technological", 
+      scientific = ["scientific", "technical", "digital", "programming", "calculating", "formulating", "cyberpunk", "mechanical", "technological", 
       "innovative", "brainy", "chemical", "quantum", "astro", "space", "theoretical", "atomic", "electronic", "gaseous", "investigative", "solar", 
       "extinct", "galactic"];
-      return scientific_default;
+      return scientific;
   }
 }
 
@@ -274,12 +277,12 @@ function getNoun(y) {
       "universe", "gravity", "darkMatter", "constellation", "circuit", "asteroid"];
       return scifi;
     default:
-      var scifi_default = ["robot", "alien", "raygun", "spaceship", "UFO", "rocket", "phaser", "astronaut", "spaceman", "planet", "star", "galaxy", 
+      scifi = ["robot", "alien", "raygun", "spaceship", "UFO", "rocket", "phaser", "astronaut", "spaceman", "planet", "star", "galaxy", 
       "computer", "future", "timeMachine", "wormHole", "timeTraveler", "scientist", "invention", "martian", "pluto", "jupiter", "saturn", "mars",
       "quasar", "blackHole", "warpDrive", "laser", "orbit", "gears", "molecule", "electron", "neutrino", "proton", "experiment", "photon", "apparatus",
       "universe", "gravity", "darkMatter", "constellation", "circuit", "asteroid"];
-      return scifi_default;
-  } 
+      return scifi;
+  }
 }
 
 var adjectives = ["dark", "color", "whimsical", "shiny", "noise", "apocalyptic", "insulting", "praise", "scientific"];  // types of adjectives for pizza titles
@@ -344,11 +347,11 @@ var makeRandomPizza = function() {
     pizza = pizza + ingredientItemizer(selectRandomMeat());
   }
 
-  for (var j = 0; j < numberOfNonMeats; j++) {
+  for (i = 0; i < numberOfNonMeats; i++) {
     pizza = pizza + ingredientItemizer(selectRandomNonMeat());
   }
 
-  for (var k = 0; k < numberOfCheeses; k++) {
+  for (i = 0; i < numberOfCheeses; i++) {
     pizza = pizza + ingredientItemizer(selectRandomCheese());
   }
 
@@ -373,7 +376,6 @@ var pizzaElementGenerator = function(i) {
   pizzaDescriptionContainer = document.createElement("div");
 
   pizzaContainer.classList.add("randomPizzaContainer");
-  pizzaContainer.style.width = "33.33%";
   pizzaContainer.style.height = "325px";
   pizzaContainer.id = "pizza" + i;                // gives each pizza element a unique id
   pizzaImageContainer.classList.add("col-md-6");
@@ -398,6 +400,7 @@ var pizzaElementGenerator = function(i) {
   return pizzaContainer;
 };
 
+var randomPizzaContainerCss = null;
 // resizePizzas(size) is called when the slider in the "Our Pizzas" section of the website moves.
 var resizePizzas = function(size) { 
   window.performance.mark("mark_start_resize");   // User Timing API function
@@ -448,13 +451,14 @@ var resizePizzas = function(size) {
     return dx;
   }
 
-  // Iterates through pizza elements on the page and changes their widths
+  // This function has been optimized so that instead of iterating through each pizza to change its size,
+  // we're now updating the width of .randomPizzaContainer class itself, which triggers the Recalculate
+  // Layout only once for all the random pizzas!
   function changePizzaSizes(size) {
-    for (var i = 0; i < document.querySelectorAll(".randomPizzaContainer").length; i++) {
-      var dx = determineDx(document.querySelectorAll(".randomPizzaContainer")[i], size);
-      var newwidth = (document.querySelectorAll(".randomPizzaContainer")[i].offsetWidth + dx) + 'px';
-      document.querySelectorAll(".randomPizzaContainer")[i].style.width = newwidth;
-    }
+    var pizzaContainer = document.getElementsByClassName("randomPizzaContainer");
+    var newWidth = (pizzaContainer[0].offsetWidth + determineDx(pizzaContainer[0], size)) + "px";
+
+    randomPizzaContainerCss.style.width = newWidth;
   }
 
   changePizzaSizes(size);
@@ -465,6 +469,18 @@ var resizePizzas = function(size) {
   var timeToResize = window.performance.getEntriesByName("measure_pizza_resize");
   console.log("Time to resize pizzas: " + timeToResize[0].duration + "ms");
 };
+
+// used for finding .randomPizzaContainer
+function findCssRule(sel) {
+  for (var i=0; i < document.styleSheets.length; i++) {
+    for (var j=0; j < document.styleSheets[i].cssRules.length; j++) {
+      if (document.styleSheets[i].cssRules[j].selectorText == sel) {
+        return document.styleSheets[i].cssRules[j];
+      }
+    }
+  }
+  return null;  // rule not found
+}
 
 window.performance.mark("mark_start_generating"); // collect timing data
 
@@ -502,14 +518,23 @@ function updatePositions() {
   frame++;
   window.performance.mark("mark_start_frame");
 
-  var items = document.querySelectorAll('.mover');
-  for (var i = 0; i < items.length; i++) {
-    var phase = Math.sin((document.body.scrollTop / 1250) + (i % 5));
-    items[i].style.left = items[i].basicLeft + 100 * phase + 'px';
+  // this optimizes the loop since Math.sin is very expensive to call
+  var phaseList = [];
+  var scrollTop = document.body.scrollTop / 1250;
+  for (var i=0; i < 5; i++) {
+    phaseList.push(Math.sin(scrollTop + i) * 100);
   }
 
-  // User Timing API to the rescue again. Seriously, it's worth learning.
-  // Super easy to create custom metrics.
+
+  for (i = 0; i < 5; i++) {
+    var items = document.getElementsByClassName("mover" + i);
+
+    // Translate3d and tranalteZ are used to update the translateX and translateZ of each moving pizza
+    for (var j=0; j < items.length; j++) {
+      items[j].style.transform = "translate3d(" + phaseList[i] + "px,0px," + items[j].z + "px)";
+    }
+  }
+
   window.performance.mark("mark_end_frame");
   window.performance.measure("measure_frame_duration", "mark_start_frame", "mark_end_frame");
   if (frame % 10 === 0) {
@@ -518,22 +543,45 @@ function updatePositions() {
   }
 }
 
-// runs updatePositions on scroll
-window.addEventListener('scroll', updatePositions);
+// It is called when the DOM is initially loaded and when the window is resized.
+// This optimizes the frame rate.
+function calculateMovingPizzas() {
+  // we can adjust the default size of the container of the moving pizzas here
+  var pizzaBoxHeight = 256;
+  var pizzaBoxWidth = 256;
 
-// Generates the sliding pizzas when the page loads.
-document.addEventListener('DOMContentLoaded', function() {
-  var cols = 8;
-  var s = 256;
-  for (var i = 0; i < 200; i++) {
+  // calculate the numbers of rows and cols of pizzas for this window size
+  var pizzaRows = Math.ceil(window.innerHeight / pizzaBoxHeight);
+  var pizzaCols = Math.ceil(window.innerWidth / pizzaBoxWidth);
+
+  var movingPizzaContainer = document.querySelector("#movingPizzas1");
+  movingPizzaContainer.innerHTML = "";
+
+  for (var i = 0; i < pizzaRows * pizzaCols; i++) {
     var elem = document.createElement('img');
-    elem.className = 'mover';
+    elem.className = 'mover' + (i % 5) + " mover";
     elem.src = "images/pizza.png";
     elem.style.height = "100px";
     elem.style.width = "73.333px";
-    elem.basicLeft = (i % cols) * s;
-    elem.style.top = (Math.floor(i / cols) * s) + 'px';
-    document.querySelector("#movingPizzas1").appendChild(elem);
+    elem.style.left = (i % pizzaCols) * pizzaBoxWidth + "px";
+    elem.style.top = (Math.floor(i / pizzaCols) * pizzaBoxHeight) + 'px';
+    elem.z = i;   // each pizza gets its own z-layer
+    movingPizzaContainer.appendChild(elem);
   }
   updatePositions();
+}
+
+// the.randomPizzaContainer class is used by all the random pizzas
+// the width style of this class is updated in changePizzaSizes() to resize all the pizzas
+document.addEventListener('DOMContentLoaded', function() {
+  randomPizzaContainerCss = findCssRule(".randomPizzaContainer");
 });
+
+// runs updatePositions on scroll
+window.addEventListener('scroll', updatePositions);
+
+// recalculate how many moving pizzas are needed when the window is resized
+window.addEventListener('resize', calculateMovingPizzas);
+
+// Generates the sliding pizzas when the page loads.
+document.addEventListener('DOMContentLoaded', calculateMovingPizzas);
